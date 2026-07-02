@@ -51,18 +51,8 @@ RAZORDOT_UPDATE_LOCATION="https://raw.githubusercontent.com/razordot/razordot/re
 
 cd "${0:a:h}"
 
-# Self-update only the managed section below (the "# UNMODIFIABLE SECTION #"
-# banner line through end-of-file) from the canonical copy at
-# RAZORDOT_UPDATE_LOCATION. The editable top of this file (your folder list and
-# options) is never touched. On divergence: show the diff, say there were
-# changes, overwrite the section, and re-run. Disable by emptying/removing
-# RAZORDOT_UPDATE_LOCATION. Note: this fetches and runs code from that URL.
-#
-# $0 inside a zsh function is the function name, not the script, so the caller
-# passes the resolved path ($1) and the invocation path ($2); the rest ("$@"
-# after the shift) are the original CLI args to forward on re-exec.
 razordot_self_update() {
-  local self="$1" invoked="$2"; shift 2
+  local script_location="$1" invoke_location="$2"; shift 2
 
   [[ -n "${RAZORDOT_UPDATE_LOCATION:-}" ]] || return 0   # disabled when unset
   [[ -t 0 ]] || return 0                                 # only when stdin is a tty (we prompt below)
@@ -70,21 +60,20 @@ razordot_self_update() {
   command -v awk  >/dev/null 2>&1 || return 0            # need awk to slice the section
 
   local marker='# UNMODIFIABLE SECTION #'
-  grep -qxF "$marker" "$self" 2>/dev/null || return 0    # only if the marker exists
+  grep -qxF "$marker" "$script_location" 2>/dev/null || return 0    # only if the marker exists
 
   local remote
   remote="$(curl -fsSL "$RAZORDOT_UPDATE_LOCATION" 2>/dev/null)" || return 0
 
   # The managed section is the marker line (first exact match) through EOF.
-  local local_section="$(awk -v m="$marker" '$0==m{f=1} f' "$self")"
+  local local_section="$(awk -v m="$marker" '$0==m{f=1} f' "$script_location")"
   local remote_section="$(printf '%s\n' "$remote" | awk -v m="$marker" '$0==m{f=1} f')"
 
-  # Only trust a payload that actually carried the marker line.
   [[ -n "$remote_section" ]] || return 0
-  # Identical sections => nothing to do. This equality is also what stops the
-  # post-update re-run from looping: after an update the freshly written section
-  # matches remote, so the re-run just re-downloads once and falls through here.
-  [[ "$local_section" == "$remote_section" ]] && return 0
+  if [[ "$local_section" == "$remote_section" ]]; then
+    echo "razordot is up to date."
+    return 0
+  fi
 
   echo "razordot: the managed section differs from the canonical copy (< current, > update):"
   diff <(printf '%s\n' "$local_section") <(printf '%s\n' "$remote_section") || true
@@ -97,19 +86,19 @@ razordot_self_update() {
   fi
   echo "razordot: updating the unmodifiable section and re-running."
 
-  local top="$(awk -v m="$marker" '$0==m{exit} {print}' "$self")"
+  local top="$(awk -v m="$marker" '$0==m{exit} {print}' "$script_location")"
   local tmp
   tmp="$(mktemp -t razordot)" || return 1
-  cp -p "$self" "$tmp" || { rm -f "$tmp"; return 1; }
+  cp -p "$script_location" "$tmp" || { rm -f "$tmp"; return 1; }
   { printf '%s\n' "$top"; printf '%s\n' "$remote_section"; } > "$tmp"
 
-  if ! mv "$tmp" "$self"; then
-    echo "razordot: could not write $self; continuing without updating."
+  if ! mv "$tmp" "$script_location"; then
+    echo "razordot: could not write $script_location; continuing without updating."
     rm -f "$tmp"
     return 1
   fi
 
-  exec /bin/zsh "$invoked" "$@"
+  exec /bin/zsh "$invoke_location" "$@"
 }
 
 razordot_self_update "${0:A}" "${0:a}" "$@"
