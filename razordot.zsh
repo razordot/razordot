@@ -7,7 +7,7 @@
 # Add/Source any of your own custom functions here, that should be available to the install scripts.
 # Check github.com/bvoq/dotfiles for the author's own dotfiles managed with razordot.
 
-bootstrap_folders=(
+install_folders=(
   # insert your install folders here
 )
 # OPTIONS:
@@ -83,15 +83,15 @@ if [[ "$1" == "--install" ]]; then
     echo "Usage: ${0:t} --install <folder>  (no '$folder/install.zsh' found)"
     exit 1
   fi
-  bootstrap_folders=("$folder")
+  install_folders=("$folder")
   unset folder
   single_folder_install=1
 fi
 
-install_scripts=(${^bootstrap_folders}/install.zsh)
+install_scripts=(${^install_folders}/install.zsh)
 
 # If your machine has a different admin check, please create a PR.
-isadmin() { [[ $EUID -eq 0 ]] || id -Gn $1 | grep -qwE 'admin|sudo|wheel' ; }
+isadminuser() { [[ $EUID -eq 0 ]] || id -Gn $1 | grep -qwE 'admin|sudo|wheel' ; }
 
 waitconfirm() {
     if read -q "choice?Continue [press y/n]? "; then
@@ -172,9 +172,6 @@ set_error_handler() {
     fi
 }
 
-# Phase 1 records every installed Brewfile here so that, once all plugins have
-# run, razordot can compare the set of declared packages against what is actually
-# installed and offer to prune the difference.
 reset_brew_bundle_accumulator() {
   export RAZORDOT_BREW_BUNDLE_ACCUMULATOR="$(mktemp -d)/Brewfile"
   : > "$RAZORDOT_BREW_BUNDLE_ACCUMULATOR"
@@ -288,12 +285,11 @@ if [[ $OSTYPE == 'darwin'* ]]; then
   check_not_rosetta
 fi
 
-#############################################################
-# Section 1: Brew tools and other admin-privileged installs #
-#############################################################
+##################################################################
+# Section 1: Brew installs and other admin-capable user installs #
+##################################################################
 
-if isadmin; then
-
+if isadminuser; then
   reset_brew_bundle_accumulator
 
   for install_script in "${install_scripts[@]}"; do
@@ -302,12 +298,14 @@ if isadmin; then
     phase_1_admin_installs
   done
 
-  brew autoremove
-  brew cleanup
-  (( ${single_folder_install:-0} )) || prune_unbundled_brew_packages
+  if command -v brew >/dev/null 2>&1; then
+    brew autoremove
+    brew cleanup
+    (( ${single_folder_install:-0} )) || prune_unbundled_brew_packages
+  fi
 
 else
-  echo "Skipping brew and other admin-privileged installs."
+  echo "Skipping admin-capable user installs."
 fi
 
 
@@ -376,7 +374,7 @@ done
 # Section 5: Heavy system changes, requires admin and reboot #
 ##############################################################
 
-if isadmin; then
+if isadminuser; then
   for install_script in "${install_scripts[@]}"; do
     phase_5_system_changes() { :; }
     source "$install_script"
