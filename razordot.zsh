@@ -15,6 +15,9 @@ install_folders=(
 # Disable updates by removing this line.
 RAZORDOT_UPDATE_LOCATION="https://raw.githubusercontent.com/razordot/razordot/refs/heads/main/razordot.zsh"
 
+# Auto-purge brew packages not in any active Brewfile (0 = never, 1 = always). Leave commented to be asked.
+# PURGE_BREW_AFTER_INSTALL=1
+
 ########################
 # UNMODIFIABLE SECTION #
 ########################
@@ -209,16 +212,22 @@ prune_unbundled_brew_packages() {
   echo "\nThe following installed packages are not in any active plugin Brewfile:"
   echo "$cleanup_preview"
 
-  if [[ ! -t 0 ]]; then
+  local do_purge
+  if [[ -n "${PURGE_BREW_AFTER_INSTALL:-}" ]]; then
+    do_purge="$PURGE_BREW_AFTER_INSTALL"
+  elif [[ ! -t 0 ]]; then
     echo "Not running interactively; leaving these packages installed."
     return 0
-  fi
-
-  if read -q "choice?Uninstall these packages now? [y/n] "; then
+  elif read -q "choice?Uninstall these packages now? [y/n] "; then
     echo
-    brew bundle cleanup --file="$RAZORDOT_BREW_BUNDLE_ACCUMULATOR" --formula --cask --zap --force
+    do_purge=1
   else
     echo "\nKeeping all installed packages."
+    do_purge=0
+  fi
+
+  if [[ "$do_purge" == 1 ]]; then
+    brew bundle cleanup --file="$RAZORDOT_BREW_BUNDLE_ACCUMULATOR" --formula --cask --zap --force
   fi
 }
 
