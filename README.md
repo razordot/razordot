@@ -70,11 +70,20 @@ In the maintainers repo .zshrc.d/ files have been ordered numerically by the fol
 
 You are free to define your own naming convention, all razordot does is link them and source them in order for you.
 
-## install functions
+## error handling
+
+`razordot` stops running as soon as any command in the install script hits a non-zero return error. Not only this, but it also shows you a stacktrace of the error.
+
+## functions
 
 Each of the `razordot` scripts come with handy functions to make writing your install scripts easier.
 
 ### universal functions
+
+- `link_dotfile <folder/dotfile> <~/.dotfile>` :: This function absolutely links the first file to the second file. If there already exists a file or symlink at the second argument it's moved to `backups/` in the repository.
+
+- `ìsadminuser` is used to check if the current user is admin capable (not admin priviledged). It's used to check whether phase1 or phase5 should be run at all and normally is not called by you.
+
 
 ### .zsh functions
 
@@ -82,7 +91,12 @@ For `.zsh` we have:
 
 - `install_brewfile <folder/Brewfile>` :: This function should only be called in phase1. It installs the specified Brewfile but also remembers it for the end of phase1. At the end of phase1, the user is prompted whether or not to purge any brew packages, casks or mas that have been installed outside of this razordot configuration. If you don't want to be prompted, you can also set the decision using `PURGE_BREW_AFTER_INSTALL` and set it to 0 for disabled and 1 for enabled.
 
+- `assure_userlevel_zsh` :: verifies that the current user uses zsh as their default shell and if not sets it.
+
+
 If you are on Windows check out `bootstrap.ps1`
+
+### .ps1 functions
 
 
 ### Secret management
