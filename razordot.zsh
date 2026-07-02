@@ -3,40 +3,12 @@
 ######################
 # MODIFIABLE SECTION #
 ######################
-# Add/Source any of your own custom functions here, that should be available to the install scripts.
 
-# Add your install folders here.
+# Add/Source any of your own custom functions here, that should be available to the install scripts.
+# Check github.com/bvoq/dotfiles for the author's own dotfiles managed with razordot.
+
 bootstrap_folders=(
-  # ai
-  antidote
-  brew
-  core
-  # crypto
-  # csharp
-  # devops
-  emacs
-  ffmpeg_ytdlp
-  # formal
-  generic
-  generic-cask
-  git
-  iterm
-  librewolf
-  # lowlevel
-  macos
-  mobile
-  nvim
-  rclone
-  readline
-  ripgrep
-  ruby
-  ssdeep
-  starship
-  # tex
-  tmux
-  vim
-  vscode
-  xcode
+  # insert your install folders here
 )
 # OPTIONS:
 
@@ -118,7 +90,8 @@ fi
 
 install_scripts=(${^bootstrap_folders}/install.zsh)
 
-isadmin() { id -G $1 | grep -q -w 80 ; }
+# If your machine has a different admin check, please create a PR.
+isadmin() { [[ $EUID -eq 0 ]] || id -Gn $1 | grep -qwE 'admin|sudo|wheel' ; }
 
 waitconfirm() {
     if read -q "choice?Continue [press y/n]? "; then
@@ -153,11 +126,7 @@ bash_error_handler() {
     done
 }
 
-# A function that returns nonzero without tripping errexit in-context (e.g. the
-# left side of `a && b`, or an explicit `return 1`) unwinds its frame before the
-# ERR trap fires at the call site, so funcfiletrace no longer holds the failing
-# line. The DEBUG trap records each command's location before it runs, keeping
-# the true inner line available to the error handler even after the unwind.
+# A function that returns nonzero without tripping errexit in-context.
 _zsh_error_handler_command_location() {
     ZSH_ERROR_HANDLER_LAST_LOCATION="${funcfiletrace[1]}"
 }
@@ -185,10 +154,6 @@ zsh_error_handler() {
         lineno=${fileandlineno##*:}  # Get the last part after the last ':'
         _zsh_error_handler_source_line "$file" "$lineno"
     done
-    # The walk is outermost-first, so the deepest live frame is last. When the
-    # failing frame already unwound (e.g. short-circuit left side, return 1) it
-    # is absent from funcfiletrace; append the DEBUG-recorded line so the true
-    # failure is still the last entry.
     if [[ -n "$ZSH_ERROR_HANDLER_LAST_LOCATION" && "$ZSH_ERROR_HANDLER_LAST_LOCATION" != "${funcfiletrace[1]}" ]]; then
         _zsh_error_handler_source_line "${ZSH_ERROR_HANDLER_LAST_LOCATION%%:*}" "${ZSH_ERROR_HANDLER_LAST_LOCATION##*:}"
     fi
@@ -317,15 +282,11 @@ set_error_handler
 
 git submodule update --init --recursive  # in case your repo has submodules.
 
-if ! [[ $OSTYPE == 'darwin'* ]]; then
-  echo "This bootstrap script is only meant for macOS. Exiting."
-  exit 1
-fi
-
 # macOS sanity checks
-assure_userlevel_zsh
-check_not_rosetta
-mkdir -p ~/Developer
+if [[ $OSTYPE == 'darwin'* ]]; then
+  assure_userlevel_zsh
+  check_not_rosetta
+fi
 
 #############################################################
 # Section 1: Brew tools and other admin-privileged installs #
