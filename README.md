@@ -90,7 +90,7 @@ Each of the `razordot` scripts come with handy functions to make writing your in
 
 For `.zsh` we have:
 
-- `install_brewfile <folder/Brewfile>` :: This function should only be called in phase1. It installs the specified Brewfile but also remembers it for the end of phase1. At the end of phase1, the user is prompted whether or not to purge any brew packages, casks or mas that have been installed outside of this razordot configuration. If you don't want to be prompted, you can also set the decision using `PURGE_BREW_AFTER_INSTALL` and set it to 0 for disabled and 1 for enabled.
+- `install_brewfile <folder/Brewfile>` :: This function should only be called in phase1. It installs the specified Brewfile but also remembers it for the end of phase1. At the end of phase1, the user is prompted whether or not to purge any brew packages, casks or mas that have been installed outside of this razordot configuration. If you don't want to be prompted, you can also set the decision using `ZAP_BREW_AFTER_INSTALL` and set it to 0 for disabled and 1 for enabled.
 
 - `assure_userlevel_zsh` :: verifies that the current user uses zsh as their default shell and if not sets it.
 
