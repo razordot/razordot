@@ -72,7 +72,7 @@ You are free to define your own naming convention, all razordot does is link the
 
 ## error handling
 
-`razordot` stops running as soon as any command in the install script hits a non-zero return error. Not only this, but it also shows you a stacktrace of the error.
+`razordot` stops running as soon as any command in the install script hits a non-zero return error (`set -e` by de). Not only this, but it also shows you a stacktrace of the error. This is intended. Fixing your dotfiles should have priority #1 and if you cannot find time to fix your dotfiles, it is a sign that they are too large.
 
 ## functions
 
@@ -82,8 +82,9 @@ Each of the `razordot` scripts come with handy functions to make writing your in
 
 - `link_dotfile <folder/dotfile> <~/.dotfile>` :: This function absolutely links the first file to the second file. If there already exists a file or symlink at the second argument it's moved to `backups/` in the repository.
 
-- `ìsadminuser` is used to check if the current user is admin capable (not admin priviledged). It's used to check whether phase1 or phase5 should be run at all and normally is not called by you.
+- `isadminuser` is used to check if the current user is admin capable (not admin priviledged). It's used to check whether phase1 or phase5 should be run at all and normally is not called by you.
 
+- `waitconfirm` a single operation asking you to press y or else the program is ended. Good for guarding phase5 tasks you don't want to run on each execution. If you don't want to be prompted (recommended), you can also set the decision using `WAITCONFIRM_DECISION` and set it to 0 for stopping and 1 for keep on going.
 
 ### .zsh functions
 
@@ -93,8 +94,8 @@ For `.zsh` we have:
 
 - `assure_userlevel_zsh` :: verifies that the current user uses zsh as their default shell and if not sets it.
 
+- `check_not_rosetta` :: If you are on macOS it checks that the script isn't run with rosetta enabled.
 
-If you are on Windows check out `bootstrap.ps1`
 
 ### .ps1 functions
 

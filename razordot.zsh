@@ -239,6 +239,20 @@ link_dotfile() {
     ln -sfn "$source_path" "$target_path"
 }
 
+prune_broken_dotfile_links() {
+    local repo_root="$PWD"
+    local dir link
+    for dir in "$@"; do
+        [[ -d "$dir" ]] || continue
+        for link in "$dir"/*(N@) "$dir"/.*(N@); do
+            [[ -e "$link" ]] && continue
+            [[ "$(readlink "$link")" == "$repo_root"/* ]] || continue
+            echo "Removing broken dotfile link: $link"
+            rm -f "$link"
+        done
+    done
+}
+
 assure_userlevel_zsh() {
     # $SHELL is the login shell (persists across subshells), portable across macOS/Linux/BSD.
     if [[ "$SHELL" != */zsh ]]; then
@@ -332,6 +346,10 @@ for install_script in "${install_scripts[@]}"; do
     source "$install_script"
     phase_3_dotfiles
 done
+
+# Drop any dotfile links we used to create but no longer do (e.g. renamed or
+# removed plugin folders), so the loaders below don't try to source dead links.
+prune_broken_dotfile_links "$HOME/.zshrc.d" "$HOME/.zshenv.d"
 
 # ~/.zshrc and ~/.zshenv are tiny loaders that just source the ~/.zshrc.d and
 # ~/.zshenv.d fragments linked by the plugin folders above.
