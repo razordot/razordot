@@ -57,12 +57,8 @@ razordot_self_update() {
     echo "razordot: the managed section differs from the canonical copy (< current, > update):"
     diff <(printf '%s\n' "$local_section") <(printf '%s\n' "$remote_section") || true
 
-    if read -q "choice?razordot: update the unmodifiable section and re-run? [y/n] "; then
-        echo
-    else
-        echo "\nrazordot: keeping the current section; not updating."
-        return 0
-    fi
+    echo "razordot: update the unmodifiable section and re-run? (remove RAZORDOT_UPDATE_LOCATION to disable update downloads)"
+    waitconfirm
     echo "razordot: updating the unmodifiable section and re-running."
 
     local top="$(awk -v m="$marker" '$0==m{exit} {print}' "$script_location")"
@@ -169,11 +165,8 @@ install_brewfile() {
     _append_to_brew_bundle_accumulator "$brew_file"
 }
 
-# Compares installed formulae/casks against the accumulated Brewfiles and, when
-# installed packages are not declared by any active plugin, lists them and asks
-# whether to uninstall. Scoped to formulae and casks: taps, VSCode extensions,
-# Mac App Store apps and the like are deliberately left untouched.
-_prune_unbundled_brew_packages() {
+# zap unmentioned casks, formulae and mas.
+_zap_unbundled_brew_packages() {
     [[ -n "$RAZORDOT_BREW_BUNDLE_ACCUMULATOR" && -s "$RAZORDOT_BREW_BUNDLE_ACCUMULATOR" ]] || return 0
 
     local cleanup_preview
@@ -316,7 +309,7 @@ if isadminuser; then
     if command -v brew >/dev/null 2>&1; then
         brew autoremove
         brew cleanup
-        ((${single_folder_install:-0})) || _prune_unbundled_brew_packages
+        ((${single_folder_install:-0})) || _zap_unbundled_brew_packages
     fi
 
 else
