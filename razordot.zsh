@@ -278,11 +278,82 @@ _razordot_ensure_submodule() {
         git submodule add "$url" "$folder"
     fi
     git submodule update --init --recursive "$folder"
+    # Mark as razordot-managed so it can be cleaned up if the entry is removed or
+    # RAZORDOT_DOWNLOAD_TYPE changes (leaves the user's own submodules untouched).
+    git config --file .gitmodules "submodule.$folder.razordot" true
+}
+
+# Repos previously materialized as gitignored downloads, identified by their
+# .gitignore pin lines ("<folder>/ # <url> <sha>").
+_razordot_managed_download_folders() {
+    [[ -f .gitignore ]] || return 0
+    awk '$2 == "#" && $1 ~ /\/$/ { s = $1; sub(/\/$/, "", s); print s }' .gitignore
+}
+
+# Repos previously materialized as submodules by razordot, identified by the
+# marker razordot writes into .gitmodules when it adds them.
+_razordot_managed_submodule_folders() {
+    [[ -f .gitmodules ]] || return 0
+    local key name
+    git config --file .gitmodules --name-only --get-regexp '\.razordot$' 2>/dev/null |
+        while read -r key; do
+            name="${key#submodule.}"
+            name="${name%.razordot}"
+            git config --file .gitmodules "submodule.$name.path"
+        done
+}
+
+# Remove a gitignored download folder and its .gitignore pin line.
+_razordot_remove_download() {
+    local folder="$1" tmp
+    echo "razordot: removing stale download folder '$folder'"
+    rm -rf "$folder"
+    [[ -f .gitignore ]] || return 0
+    tmp="$(mktemp -t razordot)" || return 1
+    awk -v f="$folder/ # " 'index($0, f) == 1 { next } { print }' .gitignore >"$tmp" &&
+        mv "$tmp" .gitignore || {
+        rm -f "$tmp"
+        return 1
+    }
+}
+
+# Remove a razordot-managed submodule (working tree, .gitmodules entry, git dir).
+_razordot_remove_submodule() {
+    local folder="$1"
+    echo "razordot: removing stale submodule '$folder'"
+    git submodule deinit -f -- "$folder" >/dev/null 2>&1 || true
+    git rm -qf -- "$folder" >/dev/null 2>&1 ||
+        git rm -qf --cached -- "$folder" >/dev/null 2>&1 || true
+    git config --file .gitmodules --remove-section "submodule.$folder" 2>/dev/null || true
+    rm -rf "$folder" ".git/modules/$folder"
+    [[ -f .gitmodules && ! -s .gitmodules ]] && rm -f .gitmodules
+    return 0
 }
 
 resolve_install_repos() {
     : ${RAZORDOT_DOWNLOAD_TYPE:=DOWNLOAD_GITIGNORED}
-    local i spec url folder
+    local i spec url folder f
+    local -A desired
+    for ((i = 1; i <= $#install_folders; i++)); do
+        spec="${install_folders[i]}"
+        [[ "$spec" == */* ]] || continue
+        folder="$(_razordot_repo_folder "$spec")"
+        desired[$folder]="$RAZORDOT_DOWNLOAD_TYPE"
+    done
+
+    # Reconcile away stale managed state (entry removed, or its acquisition type
+    # changed) before acquiring, so e.g. a download->submodule switch clears the
+    # old folder first. Skipped in single-folder mode, which can't see the full
+    # list and would otherwise treat every other repo as removed.
+    if ((${RAZORDOT_SINGLE_FOLDER:-0} == 0)); then
+        for f in $(_razordot_managed_download_folders); do
+            [[ "${desired[$f]}" == DOWNLOAD_GITIGNORED ]] || _razordot_remove_download "$f"
+        done
+        for f in $(_razordot_managed_submodule_folders); do
+            [[ "${desired[$f]}" == GITSUBMODULE ]] || _razordot_remove_submodule "$f"
+        done
+    fi
+
     for ((i = 1; i <= $#install_folders; i++)); do
         spec="${install_folders[i]}"
         [[ "$spec" == */* ]] || continue
