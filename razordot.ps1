@@ -313,7 +313,7 @@ function Invoke-RazordotDownloadCheckout {
     return $true
 }
 
-function Ensure-RazordotDownload {
+function Initialize-RazordotDownload {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Url,
@@ -367,7 +367,7 @@ function Test-RazordotSubmodulePath {
     return $false
 }
 
-function Ensure-RazordotSubmodule {
+function Initialize-RazordotSubmodule {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Url,
@@ -522,10 +522,10 @@ function Resolve-RazordotInstallRepositories {
         $url = Get-RazordotRepositoryUrl -Specification $specification
         $folder = Get-RazordotRepositoryFolder -Specification $specification
         if ($downloadType -eq "GITSUBMODULE") {
-            if (-not (Ensure-RazordotSubmodule -Url $url -Folder $folder)) {
+            if (-not (Initialize-RazordotSubmodule -Url $url -Folder $folder)) {
                 return
             }
-        } elseif (-not (Ensure-RazordotDownload -Url $url -Folder $folder)) {
+        } elseif (-not (Initialize-RazordotDownload -Url $url -Folder $folder)) {
             return
         }
         $resolvedFolders += $folder
