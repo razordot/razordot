@@ -1,16 +1,35 @@
-# razordot.ps1 - Windows counterpart to razordot.zsh.
-# https://github.com/razordot/razordot
+# Windows counterpart to razordot.zsh.
+# Keep orchestration here; each folder owns an install.ps1 that defines phase
+# functions. The selected installer is sourced once per phase, then that phase
+# function is called, matching the macOS installer model.
 
 ######################
 # MODIFIABLE SECTION #
 ######################
+# Add/Source any of your own custom functions here, that should be available to
+# the install scripts. This dotfiles repository sources its Windows helpers so
+# feature folders can call them directly. The shared WinGet implementation is
+# acquired as the razordot/winget feature folder below, so its install_wingetfile
+# command is available to every folder listed after it.
+. (Join-Path $PSScriptRoot "windows/functions.ps1")
 
-# Add/Source any of your own custom functions here, that should be available to the install scripts.
-# Check github.com/bvoq/dotfiles for the author's own dotfiles managed with razordot.
-
+# Enable or disable feature folders here, analogous to install_folders in
+# razordot.zsh. Each enabled folder must contain an install.ps1. An entry
+# containing a slash (for example "owner/repository" or a git URL) is fetched
+# as a repo. razordot/winget is listed first so its shared install_wingetfile
+# command is defined before later folders call it.
 $installFolders = @(
-    # insert your install folders here
-    # (an entry containing a "/", e.g. "owner/repo" or a git URL, is fetched as a repo)
+    "razordot/winget"
+    #"core"
+    #"generic"
+    #"windows"
+    "git"
+    #"starship"
+    #"ffmpeg_ytdlp"
+    #"rclone"
+    #"ripgrep"
+    #"vim"
+    #"vscode"
 )
 # OPTIONS:
 
@@ -24,6 +43,8 @@ $RAZORDOT_DOWNLOAD_TYPE = "DOWNLOAD_GITIGNORED"
 
 # Preset every waitconfirm prompt (0 = exit on waitconfirm, 1 = keep going). Leave commented to be asked.
 # $WAITCONFIRM_DECISION = 1
+
+########################
 # UNMODIFIABLE SECTION #
 ########################
 # This section is managed by the RAZORDOT_UPDATE_LOCATION and is under the Apache License, Version 2.0.
@@ -139,12 +160,13 @@ function link_file {
 
     $targetItem = Get-Item -LiteralPath $targetPath -Force -ErrorAction SilentlyContinue
     if ($targetItem) {
-        if ($targetItem.LinkType -in @("SymbolicLink", "Junction")) {
-            $existingTarget = [string]@($targetItem.Target)[0]
-            if (-not [IO.Path]::IsPathRooted($existingTarget)) {
-                $existingTarget = Join-Path (Split-Path -Parent $targetPath) $existingTarget
-            }
-            if ([IO.Path]::GetFullPath($existingTarget).Equals($sourcePath, [StringComparison]::OrdinalIgnoreCase)) {
+        # If the target is already an identical copy of the source, there is
+        # nothing to do. (Symlinks require elevation or Developer Mode on
+        # Windows, so for now we copy the file instead of linking it.)
+        if (-not $targetItem.PSIsContainer) {
+            $sourceHash = (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash
+            $targetHash = (Get-FileHash -LiteralPath $targetPath -Algorithm SHA256).Hash
+            if ($sourceHash -eq $targetHash) {
                 return
             }
         }
@@ -162,9 +184,13 @@ function link_file {
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $targetPath) -Force | Out-Null
     try {
-        New-Item -ItemType SymbolicLink -Path $targetPath -Target $sourcePath | Out-Null
+        # NOTE: This copies rather than symlinks for now, because creating a
+        # symbolic link on Windows requires an elevated process or Developer
+        # Mode. The name stays link_file so the call sites and mental model
+        # match the macOS side; revisit once Developer Mode is guaranteed.
+        Copy-Item -LiteralPath $sourcePath -Destination $targetPath -Force -ErrorAction Stop
     } catch {
-        throw "Could not create link '$targetPath' -> '$sourcePath'. Enable Developer Mode or run PowerShell elevated. $($_.Exception.Message)"
+        throw "Could not copy '$sourcePath' -> '$targetPath'. $($_.Exception.Message)"
     }
 }
 
@@ -232,7 +258,7 @@ function Get-RazordotDownloadPin {
         return
     }
 
-    $prefix = "$Folder/ # razordot.ps1 "
+    $prefix = "# razordot $Folder/ "
     foreach ($line in @(Get-Content -LiteralPath ".gitignore")) {
         if ($line.StartsWith($prefix, [StringComparison]::Ordinal)) {
             $parts = $line.Substring($prefix.Length) -split '\s+'
@@ -257,10 +283,14 @@ function Set-RazordotDownloadPin {
         New-Item -ItemType File -Path ".gitignore" -Force | Out-Null
     }
 
+    $commentPrefix = "# razordot $Folder/ "
+    $ignoreLine = "$Folder/"
     $lines = @(Get-Content -LiteralPath ".gitignore" | Where-Object {
-        -not $_.StartsWith("$Folder/ # razordot.ps1 ", [StringComparison]::Ordinal)
+        -not $_.StartsWith($commentPrefix, [StringComparison]::Ordinal) -and
+        $_ -ne $ignoreLine
     })
-    $lines += "$Folder/ # razordot.ps1 $Url $Commit"
+    $lines += "# razordot $Folder/ $Url $Commit"
+    $lines += "$Folder/"
     Set-Content -LiteralPath ".gitignore" -Value $lines
 }
 
@@ -404,7 +434,7 @@ function Get-RazordotManagedDownloadFolders {
     }
 
     foreach ($line in @(Get-Content -LiteralPath ".gitignore")) {
-        if ($line -match '^(.+)/ # razordot\.ps1\s+') {
+        if ($line -match '^# razordot (.+)/ \S+\s+\S+') {
             $Matches[1]
         }
     }
@@ -439,9 +469,11 @@ function Remove-RazordotDownload {
         return
     }
 
-    $downloadPrefix = "$Folder/ # razordot.ps1 "
+    $commentPrefix = "# razordot $Folder/ "
+    $ignoreLine = "$Folder/"
     $remaining = @(Get-Content -LiteralPath ".gitignore" | Where-Object {
-        -not $_.StartsWith($downloadPrefix, [StringComparison]::Ordinal)
+        -not $_.StartsWith($commentPrefix, [StringComparison]::Ordinal) -and
+        $_ -ne $ignoreLine
     })
     Set-Content -LiteralPath ".gitignore" -Value $remaining
 }
