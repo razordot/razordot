@@ -536,10 +536,11 @@ ensure_developer_tools_installed() {
   done
 }
 
-# --verbose names each stage a package defines. --slowverbose also waitconfirms
-# before that stage. A package that leaves the phase as a no-op stays quiet.
+# --verbose names each stage a package defines and times it. --slowverbose also
+# waitconfirms before that stage and prints the time after it. Both modes rank
+# those times at the end, lowest to highest. A no-op phase stays quiet.
 _razordot_run_phase() {
-  local phase="$1" install_script="$2" package stub defined
+  local phase="$1" install_script="$2" package stub defined start end elapsed
   package="${install_script:h}"
 
   builtin eval "$phase() { :; }"
@@ -547,21 +548,53 @@ _razordot_run_phase() {
   source "$install_script"
   defined="$(builtin whence -f "$phase")"
 
-  if [[ "$defined" != "$stub" ]]; then
-    if ((RAZORDOT_VERBOSE || RAZORDOT_SLOWVERBOSE)); then
-      echo "razordot: stage $phase for $package"
-    fi
-    if ((RAZORDOT_SLOWVERBOSE)); then
-      waitconfirm
-    fi
+  if [[ "$defined" == "$stub" ]]; then
+    "$phase"
+    return
   fi
-  "$phase"
+
+  if ((RAZORDOT_VERBOSE || RAZORDOT_SLOWVERBOSE)); then
+    echo "razordot: stage $phase for $package"
+  fi
+  if ((RAZORDOT_SLOWVERBOSE)); then
+    waitconfirm
+  fi
+
+  if ((RAZORDOT_VERBOSE || RAZORDOT_SLOWVERBOSE)); then
+    zmodload zsh/datetime
+    start=$EPOCHREALTIME
+    "$phase"
+    end=$EPOCHREALTIME
+    # $((0)) has a non-zero status, which set -e would treat as a failure.
+    elapsed=$((end - start)) || true
+    RAZORDOT_PHASE_TIMES+=("$(LC_ALL=C printf '%.6f %s for %s' "$elapsed" "$phase" "$package")")
+    if ((RAZORDOT_SLOWVERBOSE)); then
+      LC_ALL=C printf 'razordot: %s for %s took %.3fs\n' "$phase" "$package" "$elapsed"
+    fi
+  else
+    "$phase"
+  fi
+}
+
+# Prints timed phases from lowest to highest so the slowest are last.
+_razordot_report_phase_times() {
+  ((RAZORDOT_VERBOSE || RAZORDOT_SLOWVERBOSE)) || return 0
+  ((${#RAZORDOT_PHASE_TIMES[@]})) || return 0
+
+  local line seconds label
+  echo "razordot: phase times, lowest to highest:"
+  printf '%s\n' "${RAZORDOT_PHASE_TIMES[@]}" | LC_ALL=C sort -n | while IFS= read -r line; do
+    seconds="${line%% *}"
+    label="${line#* }"
+    LC_ALL=C printf 'razordot: %8.3fs  %s\n' "$seconds" "$label"
+  done
 }
 
 # Accepts --verbose, --slowverbose, and --install <folder>, in any order.
 _razordot_parse_args() {
   RAZORDOT_VERBOSE=0
   RAZORDOT_SLOWVERBOSE=0
+  RAZORDOT_PHASE_TIMES=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --verbose)
@@ -715,3 +748,5 @@ if isadminuser; then
     _razordot_run_phase phase_5_system_changes "$install_script"
   done
 fi
+
+_razordot_report_phase_times
