@@ -538,7 +538,7 @@ ensure_developer_tools_installed() {
 
 # --verbose names each stage a package defines and times it. --slowverbose also
 # waitconfirms before that stage and prints the time after it. Both modes rank
-# those times at the end, lowest to highest. A no-op phase stays quiet.
+# the times so far before phase 5, lowest to highest. A no-op phase stays quiet.
 _razordot_run_phase() {
   local phase="$1" install_script="$2" package stub defined start end elapsed
   package="${install_script:h}"
@@ -743,10 +743,10 @@ done
 # Section 5: Heavy system changes, requires admin and reboot #
 ##############################################################
 
+_razordot_report_phase_times
+
 if isadminuser; then
   for install_script in "${install_scripts[@]}"; do
     _razordot_run_phase phase_5_system_changes "$install_script"
   done
 fi
-
-_razordot_report_phase_times
